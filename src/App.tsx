@@ -11,6 +11,7 @@ import Register from "./pages/Register";
 import Admin from "./pages/Admin";
 import Dashboard from "./pages/Dashboard";
 import AdminRoute from "./components/AdminRoute";
+import About from "./pages/About";
 
 import { useAuth } from "./hooks/useAuth";
 
@@ -90,6 +91,11 @@ export default function App() {
           element={<Dashboard />}
         />
       </Routes>
+      <Route
+  path="/about"
+  element={<About />}
+/>
+</route>
     </BrowserRouter>
   );
 }

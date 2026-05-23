@@ -56,6 +56,12 @@ export default function Navbar() {
           >
             Dashboard
           </Link>
+          <Link
+            to="/about"
+            className="hover:text-purple-400"
+          >
+            Tentang
+          </Link>
 
           <a
             href="#paket"
@@ -121,6 +127,12 @@ export default function Navbar() {
               onClick={() => setOpen(false)}
             >
               Dashboard
+            </Link>
+            <Link
+              to="/about"
+             onClick={() => setOpen(false)}
+            >
+              Tentang
             </Link>
 
             <a
