@@ -1,265 +1,426 @@
 import { useEffect, useState } from "react";
+
+import Navbar from "../components/Navbar";
+
 import { supabase } from "../lib/supabase";
+
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 
 export default function Admin() {
   const [payments, setPayments] =
     useState<any[]>([]);
 
-  const [stats, setStats] = useState({
-    total: 0,
-    pending: 0,
-    approved: 0,
-    rejected: 0,
-  });
+  const [loading, setLoading] =
+    useState(true);
 
-  const [access, setAccess] =
-    useState(false);
+  const [chartData, setChartData] =
+    useState<any[]>([]);
 
-  const [password, setPassword] =
-    useState("");
+  const [stats, setStats] =
+    useState({
+      total: 0,
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+    });
+
+  useEffect(() => {
+    loadPayments();
+
+    // REALTIME
+    const channel = supabase
+      .channel("admin-payments")
+
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "payments",
+        },
+        () => {
+          loadPayments();
+        }
+      )
+
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   async function loadPayments() {
-    const { data } = await supabase
-      .from("payments")
-      .select("*")
-      .order("created_at", {
-        ascending: false,
-      });
+    const { data, error } =
+      await supabase
+        .from("payments")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        });
+
+    if (error) {
+      console.log(error);
+      return;
+    }
 
     if (data) {
       setPayments(data);
 
+      // STATS
       setStats({
         total: data.length,
 
         pending: data.filter(
-          (x) => x.status === "pending"
+          (item) =>
+            item.status === "pending"
         ).length,
 
         approved: data.filter(
-          (x) => x.status === "approved"
+          (item) =>
+            item.status === "approved"
         ).length,
 
         rejected: data.filter(
-          (x) => x.status === "rejected"
+          (item) =>
+            item.status === "rejected"
         ).length,
       });
+
+      // CHART
+      const grouped: any = {};
+
+      data.forEach((item) => {
+        const date = new Date(
+          item.created_at
+        ).toLocaleDateString("id-ID");
+
+        if (!grouped[date]) {
+          grouped[date] = 0;
+        }
+
+        grouped[date] += 1;
+      });
+
+      const chart = Object.keys(grouped).map(
+        (date) => ({
+          date,
+          transaksi: grouped[date],
+        })
+      );
+
+      setChartData(chart);
     }
+
+    setLoading(false);
   }
 
   async function updateStatus(
     id: string,
     status: string
   ) {
-    await supabase
-      .from("payments")
-      .update({ status })
-      .eq("id", id);
+    const { error } =
+      await supabase
+        .from("payments")
+        .update({ status })
+        .eq("id", id);
+
+    if (error) {
+      console.log(error);
+
+      alert("Gagal update status");
+
+      return;
+    }
 
     loadPayments();
   }
 
-  useEffect(() => {
-    if (access) {
-      loadPayments();
-    }
-  }, [access]);
-
-  // LOGIN ADMIN
-  if (!access) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
-        <div className="w-full max-w-md rounded-2xl bg-slate-900 p-8 shadow-2xl">
-
-          <h1 className="mb-6 text-3xl font-bold">
-            Admin Access
-          </h1>
-
-          <p className="mb-4 text-slate-400">
-            Masukkan password admin untuk masuk dashboard.
-          </p>
-
-          <input
-            type="password"
-            placeholder="Password admin"
-            value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
-            }
-            className="w-full rounded-xl border border-slate-700 bg-slate-800 p-3 outline-none"
-          />
-
-          <button
-            onClick={() => {
-              if (password === "admin123") {
-                setAccess(true);
-              } else {
-                alert("Password salah");
-              }
-            }}
-            className="mt-4 w-full rounded-xl bg-purple-600 py-3 font-semibold hover:bg-purple-700"
-          >
-            Masuk Admin
-          </button>
-
-        </div>
-      </div>
-    );
-  }
-
-  // DASHBOARD
   return (
-    <div className="min-h-screen bg-slate-950 p-8 text-white">
+    <>
+      <Navbar />
 
-      <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-4xl font-bold">
-          Admin Dashboard
-        </h1>
+      <div className="min-h-screen bg-slate-950 px-4 py-10 text-white md:px-6">
 
-        <button
-          onClick={() => setAccess(false)}
-          className="rounded-xl border border-slate-700 px-4 py-2 hover:bg-slate-800"
-        >
-          Logout
-        </button>
-      </div>
+        <div className="mx-auto max-w-7xl">
 
-      {/* STATS */}
-      <div className="mb-8 grid gap-4 md:grid-cols-4">
+          {/* HEADER */}
+          <div className="mb-10">
 
-        <div className="rounded-2xl bg-slate-900 p-6">
-          <p className="text-slate-400">
-            Total
-          </p>
+            <h1 className="text-4xl font-black md:text-5xl">
+              Admin Dashboard
+            </h1>
 
-          <h2 className="mt-2 text-4xl font-bold">
-            {stats.total}
-          </h2>
-        </div>
+            <p className="mt-3 text-slate-400">
+              Monitoring pembayaran
+              realtime
+            </p>
 
-        <div className="rounded-2xl bg-yellow-600 p-6">
-          <p>Pending</p>
+          </div>
 
-          <h2 className="mt-2 text-4xl font-bold">
-            {stats.pending}
-          </h2>
-        </div>
+          {/* STATS */}
+          <div className="mb-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
 
-        <div className="rounded-2xl bg-green-600 p-6">
-          <p>Approved</p>
+            {/* TOTAL */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
 
-          <h2 className="mt-2 text-4xl font-bold">
-            {stats.approved}
-          </h2>
-        </div>
+              <p className="text-slate-400">
+                Total Transaksi
+              </p>
 
-        <div className="rounded-2xl bg-red-600 p-6">
-          <p>Rejected</p>
+              <h2 className="mt-3 text-4xl font-black">
+                {stats.total}
+              </h2>
 
-          <h2 className="mt-2 text-4xl font-bold">
-            {stats.rejected}
-          </h2>
-        </div>
+            </div>
 
-      </div>
+            {/* PENDING */}
+            <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-6">
 
-      {/* TABLE */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-800">
-        <table className="w-full">
+              <p className="text-yellow-300">
+                Pending
+              </p>
 
-          <thead className="bg-slate-900">
-            <tr>
-              <th className="p-4 text-left">
-                Paket
-              </th>
+              <h2 className="mt-3 text-4xl font-black">
+                {stats.pending}
+              </h2>
 
-              <th className="p-4 text-left">
-                Payment
-              </th>
+            </div>
 
-              <th className="p-4 text-left">
-                Bukti
-              </th>
+            {/* APPROVED */}
+            <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-6">
 
-              <th className="p-4 text-left">
-                Status
-              </th>
+              <p className="text-green-300">
+                Approved
+              </p>
 
-              <th className="p-4 text-left">
-                Action
-              </th>
-            </tr>
-          </thead>
+              <h2 className="mt-3 text-4xl font-black">
+                {stats.approved}
+              </h2>
 
-          <tbody>
-            {payments.map((item) => (
-              <tr
-                key={item.id}
-                className="border-t border-slate-800"
+            </div>
+
+            {/* REJECTED */}
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6">
+
+              <p className="text-red-300">
+                Rejected
+              </p>
+
+              <h2 className="mt-3 text-4xl font-black">
+                {stats.rejected}
+              </h2>
+
+            </div>
+
+          </div>
+
+          {/* CHART */}
+          <div className="mb-10 rounded-2xl border border-slate-800 bg-slate-900 p-6">
+
+            <h2 className="mb-6 text-2xl font-bold">
+              Grafik Transaksi
+            </h2>
+
+            <div className="h-[350px]">
+
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
               >
-                <td className="p-4">
-                  {item.package_name}
-                </td>
 
-                <td className="p-4 capitalize">
-                  {item.payment_method}
-                </td>
+                <BarChart data={chartData}>
 
-                <td className="p-4">
-                  <a
-                    href={item.payment_proof}
-                    target="_blank"
-                    className="text-purple-400 underline"
-                  >
-                    Lihat Bukti
-                  </a>
-                </td>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                  />
 
-                <td className="p-4">
-                  <span
-                    className={`rounded-full px-3 py-1 text-sm ${
-                      item.status === "approved"
-                        ? "bg-green-600"
-                        : item.status === "rejected"
-                        ? "bg-red-600"
-                        : "bg-yellow-600"
-                    }`}
-                  >
-                    {item.status}
-                  </span>
-                </td>
+                  <XAxis dataKey="date" />
 
-                <td className="flex gap-2 p-4">
-                  <button
-                    onClick={() =>
-                      updateStatus(
-                        item.id,
-                        "approved"
-                      )
-                    }
-                    className="rounded-lg bg-green-600 px-4 py-2 hover:bg-green-700"
-                  >
-                    Approve
-                  </button>
+                  <YAxis />
 
-                  <button
-                    onClick={() =>
-                      updateStatus(
-                        item.id,
-                        "rejected"
-                      )
-                    }
-                    className="rounded-lg bg-red-600 px-4 py-2 hover:bg-red-700"
-                  >
-                    Reject
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+                  <Tooltip />
 
-        </table>
+                  <Bar
+                    dataKey="transaksi"
+                    fill="#9333ea"
+                    radius={[8, 8, 0, 0]}
+                  />
+
+                </BarChart>
+
+              </ResponsiveContainer>
+
+            </div>
+          </div>
+
+          {/* TABLE */}
+          <div className="overflow-x-auto rounded-2xl border border-slate-800">
+
+            <table className="min-w-[700px] w-full">
+
+              <thead className="bg-slate-900">
+
+                <tr>
+
+                  <th className="p-4 text-left">
+                    Paket
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Payment
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Bukti
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Status
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Tanggal
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Action
+                  </th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="p-10 text-center text-slate-400"
+                    >
+                      Loading...
+                    </td>
+                  </tr>
+                ) : payments.length ===
+                  0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="p-10 text-center text-slate-400"
+                    >
+                      Belum ada transaksi
+                    </td>
+                  </tr>
+                ) : (
+                  payments.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="border-t border-slate-800"
+                    >
+
+                      <td className="p-4">
+                        {
+                          item.package_name
+                        }
+                      </td>
+
+                      <td className="p-4 capitalize">
+                        {
+                          item.payment_method
+                        }
+                      </td>
+
+                      <td className="p-4">
+
+                        <a
+                          href={
+                            item.payment_proof
+                          }
+                          target="_blank"
+                          className="text-purple-400 underline"
+                        >
+                          Lihat
+                        </a>
+
+                      </td>
+
+                      <td className="p-4">
+
+                        <span
+                          className={`rounded-full px-3 py-1 text-sm ${
+                            item.status ===
+                            "approved"
+                              ? "bg-green-600"
+                              : item.status ===
+                                "rejected"
+                              ? "bg-red-600"
+                              : "bg-yellow-600"
+                          }`}
+                        >
+                          {item.status}
+                        </span>
+
+                      </td>
+
+                      <td className="p-4 text-slate-400">
+
+                        {new Date(
+                          item.created_at
+                        ).toLocaleString(
+                          "id-ID"
+                        )}
+
+                      </td>
+
+                      <td className="flex gap-2 p-4">
+
+                        <button
+                          onClick={() =>
+                            updateStatus(
+                              item.id,
+                              "approved"
+                            )
+                          }
+                          className="rounded-lg bg-green-600 px-4 py-2 hover:bg-green-700"
+                        >
+                          Approve
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            updateStatus(
+                              item.id,
+                              "rejected"
+                            )
+                          }
+                          className="rounded-lg bg-red-600 px-4 py-2 hover:bg-red-700"
+                        >
+                          Reject
+                        </button>
+
+                      </td>
+
+                    </tr>
+                  ))
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </div>
       </div>
-    </div>
+    </>
   );
 }
