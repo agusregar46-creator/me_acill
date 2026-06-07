@@ -1,26 +1,44 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 
 import { supabase } from "../lib/supabase";
 import { connectWallet } from "../lib/wallet";
 
 export default function Navbar() {
-  const [wallet, setWallet] =
-    useState("");
+  const [wallet, setWallet] = useState("");
+  const [open, setOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
-  const [open, setOpen] =
-    useState(false);
+  useEffect(() => {
+    checkUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  async function checkUser() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    setUser(user);
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut();
-
     window.location.href = "/login";
   }
 
   async function handleConnectWallet() {
-    const address =
-      await connectWallet();
+    const address = await connectWallet();
 
     if (address) {
       setWallet(address);
@@ -29,7 +47,6 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/90 text-white backdrop-blur">
-
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-6">
 
         {/* LOGO */}
@@ -56,6 +73,7 @@ export default function Navbar() {
           >
             Dashboard
           </Link>
+
           <Link
             to="/about"
             className="hover:text-purple-400"
@@ -77,26 +95,43 @@ export default function Navbar() {
             Admin
           </Link>
 
-          {/* WALLET */}
-          <button
-            onClick={handleConnectWallet}
-            className="rounded-xl border border-purple-500 px-4 py-2 hover:bg-purple-500/20"
-          >
-            {wallet
-              ? wallet.slice(0, 4) +
-                "..." +
-                wallet.slice(-4)
-              : "Connect Wallet"}
-          </button>
+          {!user ? (
+            <>
+              <Link
+                to="/login"
+                className="hover:text-purple-400"
+              >
+                Login
+              </Link>
 
-          {/* LOGOUT */}
-          <button
-            onClick={handleLogout}
-            className="rounded-xl bg-red-600 px-4 py-2 hover:bg-red-700"
-          >
-            Logout
-          </button>
+              <Link
+                to="/register"
+                className="rounded-xl bg-purple-600 px-4 py-2 hover:bg-purple-700"
+              >
+                Register
+              </Link>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleConnectWallet}
+                className="rounded-xl border border-purple-500 px-4 py-2 hover:bg-purple-500/20"
+              >
+                {wallet
+                  ? wallet.slice(0, 4) +
+                    "..." +
+                    wallet.slice(-4)
+                  : "Connect Wallet"}
+              </button>
 
+              <button
+                onClick={handleLogout}
+                className="rounded-xl bg-red-600 px-4 py-2 hover:bg-red-700"
+              >
+                Logout
+              </button>
+            </>
+          )}
         </div>
 
         {/* MOBILE BUTTON */}
@@ -106,13 +141,11 @@ export default function Navbar() {
         >
           {open ? <X /> : <Menu />}
         </button>
-
       </div>
 
       {/* MOBILE MENU */}
       {open && (
         <div className="border-t border-slate-800 bg-slate-900 md:hidden">
-
           <div className="flex flex-col gap-4 px-6 py-6">
 
             <Link
@@ -128,9 +161,10 @@ export default function Navbar() {
             >
               Dashboard
             </Link>
+
             <Link
               to="/about"
-             onClick={() => setOpen(false)}
+              onClick={() => setOpen(false)}
             >
               Tentang
             </Link>
@@ -149,26 +183,44 @@ export default function Navbar() {
               Admin
             </Link>
 
-            {/* WALLET */}
-            <button
-              onClick={handleConnectWallet}
-              className="rounded-xl border border-purple-500 px-4 py-2 hover:bg-purple-500/20"
-            >
-              {wallet
-                ? wallet.slice(0, 4) +
-                  "..." +
-                  wallet.slice(-4)
-                : "Connect Wallet"}
-            </button>
+            {!user ? (
+              <>
+                <Link
+                  to="/login"
+                  onClick={() => setOpen(false)}
+                >
+                  Login
+                </Link>
 
-            {/* LOGOUT */}
-            <button
-              onClick={handleLogout}
-              className="rounded-xl bg-red-600 px-4 py-2 hover:bg-red-700"
-            >
-              Logout
-            </button>
+                <Link
+                  to="/register"
+                  onClick={() => setOpen(false)}
+                  className="rounded-xl bg-purple-600 px-4 py-2 text-center"
+                >
+                  Register
+                </Link>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleConnectWallet}
+                  className="rounded-xl border border-purple-500 px-4 py-2"
+                >
+                  {wallet
+                    ? wallet.slice(0, 4) +
+                      "..." +
+                      wallet.slice(-4)
+                    : "Connect Wallet"}
+                </button>
 
+                <button
+                  onClick={handleLogout}
+                  className="rounded-xl bg-red-600 px-4 py-2"
+                >
+                  Logout
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
