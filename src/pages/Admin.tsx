@@ -41,54 +41,60 @@ export default function Admin() {
   }, []);
 
   async function checkAdmin() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      navigate("/login");
-      return;
-    }
+      if (!user) {
+        navigate("/login");
+        return;
+      }
 
-    const { data: profile, error } =
-      await supabase
-        .from("profiles")
+      const {
+        data: roleData,
+        error,
+      } = await supabase
+        .from("user_roles")
         .select("role")
-        .eq("id", user.id)
+        .eq("user_id", user.id)
         .single();
 
-    if (error || !profile) {
+      console.log("User ID:", user.id);
+      console.log("Role Data:", roleData);
+
+      if (error || !roleData) {
+        navigate("/dashboard");
+        return;
+      }
+
+      if (roleData.role !== "admin") {
+        navigate("/dashboard");
+        return;
+      }
+
+      setAuthorized(true);
+
+      await loadPayments();
+
+      supabase
+        .channel("admin-payments")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "payments",
+          },
+          () => {
+            loadPayments();
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.error(err);
       navigate("/dashboard");
-      return;
     }
-
-    if (profile.role !== "admin") {
-      navigate("/dashboard");
-      return;
-    }
-
-    setAuthorized(true);
-
-    loadPayments();
-
-    const channel = supabase
-      .channel("admin-payments")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "payments",
-        },
-        () => {
-          loadPayments();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }
 
   async function loadPayments() {
@@ -172,7 +178,7 @@ export default function Admin() {
   if (!authorized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
-        Memeriksa akses...
+        Memeriksa akses admin...
       </div>
     );
   }
@@ -182,7 +188,6 @@ export default function Admin() {
       <Navbar />
 
       <div className="min-h-screen bg-slate-950 px-4 py-10 text-white md:px-6">
-
         <div className="mx-auto max-w-7xl">
 
           <div className="mb-10">
@@ -237,9 +242,7 @@ export default function Admin() {
                 width="100%"
                 height="100%"
               >
-                <BarChart
-                  data={chartData}
-                >
+                <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
@@ -248,12 +251,7 @@ export default function Admin() {
                   <Bar
                     dataKey="transaksi"
                     fill="#9333ea"
-                    radius={[
-                      8,
-                      8,
-                      0,
-                      0,
-                    ]}
+                    radius={[8, 8, 0, 0]}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -261,11 +259,9 @@ export default function Admin() {
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-800">
-
             <table className="w-full min-w-[700px]">
 
               <thead className="bg-slate-900">
-
                 <tr>
                   <th className="p-4 text-left">
                     Paket
@@ -291,11 +287,9 @@ export default function Admin() {
                     Action
                   </th>
                 </tr>
-
               </thead>
 
               <tbody>
-
                 {loading ? (
                   <tr>
                     <td
@@ -306,89 +300,78 @@ export default function Admin() {
                     </td>
                   </tr>
                 ) : (
-                  payments.map(
-                    (item) => (
-                      <tr
-                        key={item.id}
-                        className="border-t border-slate-800"
-                      >
-                        <td className="p-4">
-                          {
-                            item.package_name
+                  payments.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="border-t border-slate-800"
+                    >
+                      <td className="p-4">
+                        {item.package_name}
+                      </td>
+
+                      <td className="p-4">
+                        {item.payment_method}
+                      </td>
+
+                      <td className="p-4">
+                        <a
+                          href={
+                            item.payment_proof
                           }
-                        </td>
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-purple-400 underline"
+                        >
+                          Lihat
+                        </a>
+                      </td>
 
-                        <td className="p-4">
-                          {
-                            item.payment_method
+                      <td className="p-4">
+                        {item.status}
+                      </td>
+
+                      <td className="p-4">
+                        {new Date(
+                          item.created_at
+                        ).toLocaleString(
+                          "id-ID"
+                        )}
+                      </td>
+
+                      <td className="p-4 flex gap-2">
+                        <button
+                          onClick={() =>
+                            updateStatus(
+                              item.id,
+                              "approved"
+                            )
                           }
-                        </td>
+                          className="rounded bg-green-600 px-3 py-2"
+                        >
+                          Approve
+                        </button>
 
-                        <td className="p-4">
-                          <a
-                            href={
-                              item.payment_proof
-                            }
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-purple-400 underline"
-                          >
-                            Lihat
-                          </a>
-                        </td>
-
-                        <td className="p-4">
-                          {item.status}
-                        </td>
-
-                        <td className="p-4">
-                          {new Date(
-                            item.created_at
-                          ).toLocaleString(
-                            "id-ID"
-                          )}
-                        </td>
-
-                        <td className="p-4 flex gap-2">
-
-                          <button
-                            onClick={() =>
-                              updateStatus(
-                                item.id,
-                                "approved"
-                              )
-                            }
-                            className="rounded bg-green-600 px-3 py-2"
-                          >
-                            Approve
-                          </button>
-
-                          <button
-                            onClick={() =>
-                              updateStatus(
-                                item.id,
-                                "rejected"
-                              )
-                            }
-                            className="rounded bg-red-600 px-3 py-2"
-                          >
-                            Reject
-                          </button>
-
-                        </td>
-                      </tr>
-                    )
-                  )
+                        <button
+                          onClick={() =>
+                            updateStatus(
+                              item.id,
+                              "rejected"
+                            )
+                          }
+                          className="rounded bg-red-600 px-3 py-2"
+                        >
+                          Reject
+                        </button>
+                      </td>
+                    </tr>
+                  ))
                 )}
-
               </tbody>
 
             </table>
-
           </div>
 
         </div>
-
       </div>
     </>
   );
