@@ -468,30 +468,82 @@ export default function Home() {
                 )}
 
                 {/* SOLANA BUTTON */}
-                {paymentMethod ===
-                  "solana" && (
-                  <button
-                    onClick={async () => {
-                      const signature =
-                        await payWithSolana(
-                          selectedPackage.price_sol
-                        );
+{paymentMethod === "solana" && (
+  <button
+    onClick={async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-                      if (signature) {
-                        alert(
-                          "Pembayaran Solana berhasil 🚀"
-                        );
+        if (!user) {
+          alert("Silakan login dulu");
+          return;
+        }
 
-                        console.log(
-                          signature
-                        );
-                      }
-                    }}
-                    className="mt-6 w-full rounded-xl bg-green-600 py-3 font-semibold hover:bg-green-700"
-                  >
-                    Bayar dengan Solana
-                  </button>
-                )}
+        const signature =
+          await payWithSolana(
+            selectedPackage.price_sol
+          );
+
+        console.log(
+          "SIGNATURE:",
+          signature
+        );
+
+        if (!signature) {
+          alert(
+            "Transaksi Solana gagal"
+          );
+          return;
+        }
+
+        const { error } =
+          await supabase
+            .from("payments")
+            .insert({
+              user_id: user.id,
+              package_name:
+                selectedPackage.name,
+              payment_method:
+                "solana",
+              payment_proof:
+                signature,
+              status: "pending",
+              created_at:
+                new Date().toISOString(),
+            });
+
+        console.log(
+          "INSERT ERROR:",
+          error
+        );
+
+        if (error) {
+          alert(error.message);
+          return;
+        }
+
+        alert(
+          "Pembayaran Solana berhasil dan menunggu verifikasi admin 🚀"
+        );
+
+        setSelectedPackage(null);
+        setPaymentProof(null);
+        setPreview(null);
+        setPaymentMethod("solana");
+      } catch (err) {
+        console.error(err);
+        alert(
+          "Terjadi kesalahan saat pembayaran"
+        );
+      }
+    }}
+    className="mt-6 w-full rounded-xl bg-green-600 py-3 font-semibold hover:bg-green-700"
+  >
+    Bayar dengan Solana
+  </button>
+)}
 
                 {/* CONFIRM */}
                 <button
